@@ -1,7 +1,9 @@
-
 import zipfile
 import os
 import dask.dataframe as dd
+import matplotlib
+matplotlib.use('Agg')  # Используем бэкенд Agg для работы без GUI
+import matplotlib.pyplot as plt
 from sqlalchemy import create_engine
 
 # Функция для разархивации ZIP файла
@@ -17,11 +19,11 @@ extract_directory = os.path.dirname(os.path.abspath(zip_file_path))
 # Разархивируем файл
 unzip_file(zip_file_path, extract_directory)
 
-# Путь к распакованномуархиву
+# Путь к распакованному архиву
 csv_directory = os.path.join(extract_directory, 'recipes_full')
 
 # Забираем все CSV файлы в Dask DataFrame с указанием типов данных
-df = dd.read_csv(os.path.join(csv_directory, '*.csv'), dtype={'minutes': 'float64', 'n_steps': 'float64'})
+df = dd.read_csv(os.path.join(csv_directory, '*.csv'), dtype={'minutes': 'float64', 'n_steps': 'float64', 'submitted': 'str'})
 
 # Выводим метаинформацию о Dask DataFrame
 print(f"Число партий: {df.npartitions}")
@@ -39,20 +41,42 @@ for i in range(df.npartitions):
 max_n_steps = df['n_steps'].max()
 print("Максимальное значение в n_steps:", max_n_steps.compute())
 
+# Визуализируем граф вычислений максимального количества шагов
+plt.figure(figsize=(8, 6))
+plt.bar(['Max n_steps'], [max_n_steps.compute()], color='blue')
+plt.title('Максимальное количество шагов (n_steps)')
+plt.ylabel('Количество шагов')
+plt.savefig('dask_max_steps_count.png')
+plt.close()  # Закрываем фигуру
+
 # Подсчёт количества отзывов с группировкой по месяцам добавления
-# преобразуем дату подачи в формат даты
-#df['time'] = dd.to_datetime(df['date'])
-# Создаем новый столбец с месяцем
-df['month'] = df['time'].dt.to_period('M')
-# Агрегируем данные по месяцам, 
-# monthly_agg_sorted = monthly_agg.sort_value_by('month') 
-#print(monthly_agg_sorted)
-
-
-#reviews_per_month = df.groupby(df['submitted'].dt.to_period('M')).size().compute()
-#print("Количество отзывов по месяцам:\n", reviews_per_month)
+df['time'] = dd.to_datetime(df['submitted'])  # Преобразуем дату подачи в формат даты
+reviews_per_month = df.groupby(df['time'].dt.to_period('M')).size().compute()
+print(reviews_per_month)  # Выводим количество по месяцам
 
 # Находим пользователя, отправлявшего рецепты чаще всех
 top_user = df['contributor_id'].value_counts().idxmax().compute()
 print(f"Пользователь, отправлявший рецепты чаще всех: {top_user}")
 
+# Первый и последний рецепт
+last_rec = df.nlargest(1, 'time').compute()
+print(f'Последний по дате рецепт: \n{last_rec}')
+first_rec = df.loc[df['time'] == df['time'].min()].compute()
+print(f'Первые по дате подачи рецепты: \n{first_rec}')
+
+#Загружаем рецепты в базу данных SQLite
+engine = create_engine('sqlite:///recipes.db')  # Устанавливаем подключение 
+to_sql = df.to_delayed()  # Итерация по партиям с помощью to_delayed
+for part in to_sql:
+    part.to_sql('recipes', engine, if_exists='append', index=False)
+
+print("Данные успешно загружены в SQLite.")
+median_time = df['minutes'].median_approximate().compute()  # Вычисляем медиану времени приготовления
+mean_steps = df['n_steps'].mean().compute()      # Вычисляем среднее количество шагов
+# Загрузка данных из таблицы recipes, используя строку подключения
+loaded_df = dd.read_sql_table('recipes', 'sqlite:///recipes.db', index_col='id')
+# Фильтрация данных
+filtered_df = loaded_df[(loaded_df['minutes'] < median_time) & (loaded_df['n_steps'] < mean_steps)]
+# Сохраняем отфильтрованные данные в один CSV-файл
+filtered_df.to_csv('filtered_recepts.csv', single_file=True, index=False)  
+print("Отфильтрованные рецепты сохранены в filtered_recepts.csv.")
