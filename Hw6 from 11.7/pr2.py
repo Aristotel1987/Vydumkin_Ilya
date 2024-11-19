@@ -4,7 +4,6 @@ import dask.dataframe as dd
 import matplotlib
 matplotlib.use('Agg')  # Используем бэкенд Agg для работы без GUI
 import matplotlib.pyplot as plt
-from sqlalchemy import create_engine
 
 # Функция для разархивации ZIP файла
 def unzip_file(zip_path, extract_to):
@@ -63,20 +62,16 @@ last_rec = df.nlargest(1, 'time').compute()
 print(f'Последний по дате рецепт: \n{last_rec}')
 first_rec = df.loc[df['time'] == df['time'].min()].compute()
 print(f'Первые по дате подачи рецепты: \n{first_rec}')
-
-#Загружаем рецепты в базу данных SQLite
-engine = create_engine('sqlite:///recipes.db')  # Устанавливаем подключение 
-to_sql = df.to_delayed()  # Итерация по партиям с помощью to_delayed
-for part in to_sql:
-    part.to_sql('recipes', engine, if_exists='append', index=False)
-
+#Загружаем рецепты в базу данных 
+connstring = 'sqlite:///recipes.db'  # Строка подключения  
+df.to_sql('recipes',connstring, if_exists='replace', index=False)  # Заменяем таблицу, если она существует
 print("Данные успешно загружены в SQLite.")
 median_time = df['minutes'].median_approximate().compute()  # Вычисляем медиану времени приготовления
 mean_steps = df['n_steps'].mean().compute()      # Вычисляем среднее количество шагов
 # Загрузка данных из таблицы recipes, используя строку подключения
-loaded_df = dd.read_sql_table('recipes', 'sqlite:///recipes.db', index_col='id')
+loaded_df = dd.read_sql_table('recipes', connstring, index_col='id')
 # Фильтрация данных
 filtered_df = loaded_df[(loaded_df['minutes'] < median_time) & (loaded_df['n_steps'] < mean_steps)]
 # Сохраняем отфильтрованные данные в один CSV-файл
-filtered_df.to_csv('filtered_recepts.csv', single_file=True, index=False)  
+filtered_df.to_csv('loaded_recipes.csv', single_file=True, index=False) 
 print("Отфильтрованные рецепты сохранены в filtered_recepts.csv.")
