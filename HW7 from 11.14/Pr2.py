@@ -47,6 +47,7 @@ knn_model = KNeighborsClassifier(n_neighbors=5)  # Создание модели
 knn_model.fit(X_train, y_train)  # Обучаем модель
 y_pred_knn = knn_model.predict(X_test)  # Предсказание на тестовой выборке
 
+
 #  Random Forest
 rf_model = RandomForestClassifier(n_estimators=100, random_state=42)  # Создание модели Random Forest
 rf_model.fit(X_train, y_train)  # Обучаем модель
@@ -61,8 +62,6 @@ for model_name, preds in zip(models, predictions):
     print("Отчет по классификации:\n", classification_report(y_test, preds))  # Отчет по классификации
 
     print("Матрица ошибок:\n", confusion_matrix(y_test, preds))  # Матрица ошибок
-# Выводим параметры лучшей модели
-#print(rf_model.get_params())
 # Подбор параметров для логистической регрессии
 param_grid_log_reg = {
     'penalty': ['l1', 'l2', 'elasticnet', 'none'],  # Тип регуляризации
@@ -88,4 +87,9 @@ y_pred_best_log_reg = best_log_reg_model.predict(X_test)
 print("\nЛогистическая Регрессия с лучшими параметрами:\n")
 print("Точность:", accuracy_score(y_test, y_pred_best_log_reg))  # Точность
 print("Отчет по классификации:\n", classification_report(y_test, y_pred_best_log_reg))  # Отчет по классификации
-print("Матрица ошибок:\n", confusion_matrix(y_test, y_pred_best_log_reg))  # Матрица ошибок
+print("Матрица ошибок:\n", confusion_matrix(y_test, y_pred_best_log_reg))  
+
+
+# Выводим параметры лучшей модели
+#print(rf_model.get_params())
+
